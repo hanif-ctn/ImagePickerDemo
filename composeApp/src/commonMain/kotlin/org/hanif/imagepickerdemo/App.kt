@@ -80,8 +80,8 @@ fun App() {
         }
 
         val galleryManager = rememberGalleryManager(
-            isSingleSelection = true,
-            type = PickerType.DOCUMENT
+            isSingleSelection = false,
+            type = PickerType.IMAGE
         ){
             coroutineScope.launch {
 

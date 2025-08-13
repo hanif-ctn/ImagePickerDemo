@@ -23,4 +23,6 @@ enum class PermissionType {
 expect class SharedImage {
     fun toByteArray(): ByteArray?
     fun toImageBitmap(): ImageBitmap?
+    val mimeType: String?
+    val name: String?
 }

@@ -63,10 +63,12 @@ fun App() {
             var imageBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
             var imageList = remember { mutableStateListOf<ImageBitmap?>() }
             var videoList = remember { mutableStateListOf<SharedVideo>() }
+            var documentList = remember { mutableStateListOf<SharedDocument>() } // Add this line
             var imageSourceOptionDialog by remember { mutableStateOf(value = false) }
             var launchCamera by remember { mutableStateOf(value = false) }
             var launchGallery by remember { mutableStateOf(value = false) }
             var launchVideoGallery by remember { mutableStateOf(value = false) }
+            var launchDocumentPicker by remember { mutableStateOf(value = false) } // Add this line
             var launchSetting by remember { mutableStateOf(value = false) }
             var permissionRationalDialog by remember { mutableStateOf(value = false) }
 
@@ -169,6 +171,34 @@ fun App() {
                     }
                 }
             }
+            val documentPickerManager = rememberGalleryManager(
+                isSingleSelection = false,
+                type = PickerType.DOCUMENT
+            ) { sharedFiles ->
+                coroutineScope.launch {
+                    withContext(Dispatchers.Default) {
+                        sharedFiles?.forEach { file ->
+                            documentList.add(
+                                SharedDocument(
+                                    name = file.name ?: "Unknown Document",
+                                    mimeType = file.mimeType,
+                                    data = file.toByteArray()
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Handle document picker launch
+            if (launchDocumentPicker) {
+                if (permissionsManager.isPermissionGranted(PermissionType.GALLERY)) {
+                    documentPickerManager.launch()
+                } else {
+                    permissionsManager.askPermission(PermissionType.GALLERY)
+                }
+                launchDocumentPicker = false
+            }
 
             // Handle dialog and permission flows
             if (imageSourceOptionDialog) {
@@ -259,30 +289,36 @@ fun App() {
                 modifier = Modifier.fillMaxSize().padding(it).background(Color.DarkGray),
                 contentAlignment = Alignment.Center
             ) {
-                if (imageBitmap != null || imageList.isNotEmpty() || videoList.isNotEmpty()) {
-                    // Modern Media Display Screen
-                    ModernMediaDisplayScreen(
+                if (imageBitmap != null || imageList.isNotEmpty() || videoList.isNotEmpty() || documentList.isNotEmpty()) {
+                    // Enhanced Media Display Screen with documents
+                    EnhancedMediaDisplayScreen(
                         imageList = imageList,
                         videoList = videoList,
+                        documentList = documentList, // Add this line
                         singleImage = imageBitmap,
                         onVideoClick = { video ->
                             coroutineScope.launch {
                                 openVideoInExternalPlayer(video)
                             }
                         },
+                        onDocumentClick = { document -> // Add this lambda
+                            coroutineScope.launch {
+                                openDocumentInExternalViewer(document)
+                            }
+                        },
                         onImageClick = {
                             imageSourceOptionDialog = true
                         },
                         onBackToSelection = {
-                            // Clear all media and return to selection screen
                             imageBitmap = null
                             imageList.clear()
                             videoList.clear()
+                            documentList.clear() // Add this line
                         }
                     )
                 } else {
-                    // Modern Selection Screen
-                    ModernSelectionScreen(
+                    // Enhanced Selection Screen with document option
+                    EnhancedSelectionScreen(
                         onImageGalleryClick = {
                             launchGallery = true
                             launchVideoGallery = false
@@ -290,6 +326,9 @@ fun App() {
                         onVideoGalleryClick = {
                             launchVideoGallery = true
                             launchGallery = false
+                        },
+                        onDocumentPickerClick = { // Add this lambda
+                            launchDocumentPicker = true
                         },
                         onCameraClick = {
                             launchCamera = true
@@ -613,11 +652,13 @@ fun MediaSourceOptionDialog(
 
 // Modern Media Display Screen with contemporary design
 @Composable
-fun ModernMediaDisplayScreen(
+fun EnhancedMediaDisplayScreen(
     imageList: List<ImageBitmap?>,
     videoList: List<SharedVideo>,
+    documentList: List<SharedDocument>, // Add this parameter
     singleImage: ImageBitmap?,
     onVideoClick: (SharedVideo) -> Unit,
+    onDocumentClick: (SharedDocument) -> Unit, // Add this parameter
     onImageClick: () -> Unit,
     onBackToSelection: () -> Unit
 ) {
@@ -708,8 +749,26 @@ fun ModernMediaDisplayScreen(
                     }
                 }
 
-                // Empty state shouldn't happen, but just in case
-                if (allImages.isEmpty() && videoList.isEmpty()) {
+                // Documents Section
+                if (documentList.isNotEmpty()) {
+                    item {
+                        MediaSectionHeader(
+                            title = "Documents",
+                            count = documentList.size,
+                            icon = Res.drawable.ic_person_circle // Replace with document icon when available
+                        )
+                    }
+
+                    items(documentList) { document ->
+                        DocumentCard(
+                            document = document,
+                            onClick = { onDocumentClick(document) }
+                        )
+                    }
+                }
+
+                // Update empty state check
+                if (allImages.isEmpty() && videoList.isEmpty() && documentList.isEmpty()) {
                     item {
                         EmptyMediaState(onBackToSelection = onBackToSelection)
                     }
@@ -906,6 +965,137 @@ fun ModernImageCard(
     }
 }
 
+@OptIn(ExperimentalResourceApi::class)
+@Composable
+fun DocumentCard(
+    document: SharedDocument,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clickable { onClick() },
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Document icon with type-specific styling
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .background(
+                        color = getDocumentTypeColor(document.mimeType).copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = painterResource(getDocumentTypeIcon(document.mimeType)),
+                    contentDescription = "Document",
+                    modifier = Modifier.size(28.dp),
+                    tint = getDocumentTypeColor(document.mimeType)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            // Document details
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = document.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // File type and size row
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // File type chip
+                    Text(
+                        text = getFileExtension(document.name, document.mimeType).uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = getDocumentTypeColor(document.mimeType),
+                        modifier = Modifier
+                            .background(
+                                color = getDocumentTypeColor(document.mimeType).copy(alpha = 0.12f),
+                                shape = RoundedCornerShape(6.dp)
+                            )
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                    )
+
+                    // File size
+                    Text(
+                        text = formatFileSize(document.size.toInt()),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+            }
+
+            // Open indicator
+            Icon(
+                painter = painterResource(Res.drawable.ic_person_circle), // Use open/external icon when available
+                contentDescription = "Open document",
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+            )
+        }
+    }
+}
+
+// Helper functions
+@Composable
+fun getDocumentTypeColor(mimeType: String?): Color {
+    return when {
+        mimeType?.contains("pdf") == true -> Color(0xFFE53E3E) // Red for PDF
+        mimeType?.contains("word") == true || mimeType?.contains("document") == true -> Color(0xFF2B6CB0) // Blue for Word
+        mimeType?.contains("sheet") == true || mimeType?.contains("excel") == true -> Color(0xFF38A169) // Green for Excel
+        mimeType?.contains("presentation") == true || mimeType?.contains("powerpoint") == true -> Color(0xFFD69E2E) // Orange for PowerPoint
+        mimeType?.contains("text") == true -> Color(0xFF805AD5) // Purple for text files
+        else -> MaterialTheme.colorScheme.primary
+    }
+}
+
+@OptIn(ExperimentalResourceApi::class)
+@Composable
+fun getDocumentTypeIcon(mimeType: String?): org.jetbrains.compose.resources.DrawableResource {
+    // You'll need to add appropriate icons to your resources
+    return Res.drawable.ic_person_circle // Use appropriate document icons when available
+}
+
+fun getFileExtension(fileName: String, mimeType: String?): String {
+    val extension = fileName.substringAfterLast(".", "")
+    if (extension.isNotEmpty()) return extension
+
+    return when (mimeType) {
+        "application/pdf" -> "PDF"
+        "application/msword" -> "DOC"
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> "DOCX"
+        "application/vnd.ms-excel" -> "XLS"
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" -> "XLSX"
+        "text/plain" -> "TXT"
+        else -> "FILE"
+    }
+}
+
+
 // Enhanced Video Card for display screen
 @Composable
 fun ModernVideoCard(
@@ -1054,11 +1244,11 @@ fun EmptyMediaState(
     }
 }
 
-// Modern Selection Screen with contemporary design
 @Composable
-fun ModernSelectionScreen(
+fun EnhancedSelectionScreen(
     onImageGalleryClick: () -> Unit,
     onVideoGalleryClick: () -> Unit,
+    onDocumentPickerClick: () -> Unit, // Add this parameter
     onCameraClick: () -> Unit,
     onMixedGalleryClick: () -> Unit
 ) {
@@ -1130,6 +1320,17 @@ fun ModernSelectionScreen(
                         modifier = Modifier.weight(1f)
                     )
                 }
+
+                // Document Picker Card
+                ModernActionCard(
+                    title = "Documents",
+                    subtitle = "Browse files & docs",
+                    icon = Res.drawable.ic_person_circle, // Replace with document icon when available
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    onContainerColor = MaterialTheme.colorScheme.onErrorContainer,
+                    onClick = onDocumentPickerClick,
+                    modifier = Modifier.fillMaxWidth()
+                )
 
                 // Camera Card (Full width)
                 ModernActionCard(

@@ -1,17 +1,17 @@
-// iosMain/kotlin/org/hanif/imagepickerdemo/CameraManager.ios.kt
 package org.hanif.imagepickerdemo
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import kotlinx.cinterop.ByteVar
-import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.addressOf
-import kotlinx.cinterop.reinterpret
-import kotlinx.cinterop.usePinned
-import platform.Foundation.*
-import platform.UIKit.*
+import platform.UIKit.UIApplication
+import platform.UIKit.UIImage
+import platform.UIKit.UIImagePickerController
+import platform.UIKit.UIImageJPEGRepresentation
+import platform.UIKit.UIImagePickerControllerDelegateProtocol
+import platform.UIKit.UIImagePickerControllerEditedImage
+import platform.UIKit.UIImagePickerControllerOriginalImage
+import platform.UIKit.UIImagePickerControllerSourceType
+import platform.UIKit.UINavigationControllerDelegateProtocol
 import platform.darwin.NSObject
-import platform.posix.memcpy
 
 @Composable
 actual fun rememberCameraManager(onResult: (SharedImage?) -> Unit): CameraManager {
@@ -64,18 +64,5 @@ actual class CameraManager actual constructor(
 ) {
     actual fun launch() {
         onLaunch()
-    }
-}
-
-        // Helper function to convert NSData to ByteArray
-@OptIn(ExperimentalForeignApi::class)
-private fun nsDataToByteArray(data: NSData): ByteArray {
-    val length = data.length.toInt()
-    if (length == 0) return ByteArray(0)
-
-    return ByteArray(length).apply {
-        usePinned { pinned ->
-            memcpy(pinned.addressOf(0), data.bytes, length.toULong())
-        }
     }
 }

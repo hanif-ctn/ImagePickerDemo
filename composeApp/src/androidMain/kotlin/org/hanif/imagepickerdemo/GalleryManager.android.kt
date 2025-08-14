@@ -14,7 +14,6 @@ import androidx.compose.ui.platform.LocalContext
 import android.graphics.BitmapFactory
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import java.io.ByteArrayOutputStream
 
 @Composable
 actual fun rememberGalleryManager(
@@ -76,7 +75,7 @@ actual class GalleryManager actual constructor(private val onLaunch: () -> Unit)
     }
 }
 
-private fun uriToSharedImage(contentResolver: ContentResolver, uri: Uri): SharedImage? {
+internal fun uriToSharedImage(contentResolver: ContentResolver, uri: Uri): SharedImage? {
     return try {
         contentResolver.openInputStream(uri)?.use { input ->
             val bytes = input.readBytes()

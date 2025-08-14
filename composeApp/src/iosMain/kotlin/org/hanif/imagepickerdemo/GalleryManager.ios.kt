@@ -256,7 +256,7 @@ actual class GalleryManager actual constructor(private val onLaunch: () -> Unit)
 
 // helper: convert NSData -> ByteArray
 @OptIn(ExperimentalForeignApi::class)
-private fun nsDataToByteArray(data: NSData): ByteArray {
+internal fun nsDataToByteArray(data: NSData): ByteArray {
     val length = data.length.toInt()
     if (length == 0) return ByteArray(0)
 

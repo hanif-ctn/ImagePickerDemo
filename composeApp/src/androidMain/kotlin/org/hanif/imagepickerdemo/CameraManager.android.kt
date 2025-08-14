@@ -20,7 +20,8 @@ actual fun rememberCameraManager(onResult: (SharedImage?) -> Unit): CameraManage
         contract = ActivityResultContracts.TakePicture(),
         onResult = { success ->
             if (success) {
-                //onResult.invoke(SharedImage(BitmapUtils.getBitmapFromUri(tempPhotoUri, contentResolver)))
+                val item = uriToSharedImage(contentResolver, tempPhotoUri)
+                onResult(item)
             }
         }
     )

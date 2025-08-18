@@ -36,7 +36,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -59,110 +58,88 @@ import kotlin.math.roundToInt
 fun App() {
     MaterialTheme {
         Scaffold {
-            val coroutineScope = rememberCoroutineScope()
-            var imageBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-            var imageList = remember { mutableStateListOf<ImageBitmap?>() }
-            var videoList = remember { mutableStateListOf<SharedVideo>() }
-            var documentList = remember { mutableStateListOf<SharedDocument>() } // Add this line
-            var imageSourceOptionDialog by remember { mutableStateOf(value = false) }
-            var launchCamera by remember { mutableStateOf(value = false) }
-            var launchGallery by remember { mutableStateOf(value = false) }
-            var launchVideoGallery by remember { mutableStateOf(value = false) }
-            var launchDocumentPicker by remember { mutableStateOf(value = false) } // Add this line
-            var launchSetting by remember { mutableStateOf(value = false) }
-            var permissionRationalDialog by remember { mutableStateOf(value = false) }
+            val wantToShow = remember { mutableStateOf(false) }
+            val videoData = remember { mutableStateOf<SharedVideo?>(null) }
 
-            val permissionsManager = createPermissionsManager(object : PermissionCallback {
-                override fun onPermissionStatus(
-                    permissionType: PermissionType,
-                    status: PermissionStatus
-                ) {
-                    when (status) {
-                        PermissionStatus.GRANTED -> {
-                            when (permissionType) {
-                                PermissionType.CAMERA -> launchCamera = true
-                                PermissionType.GALLERY -> {
-                                    launchGallery = true
-                                    launchVideoGallery = false
-                                }
-                            }
-                        }
+            if (wantToShow.value) {
+                VideoPlayer(modifier = Modifier.fillMaxSize().padding(it), mySharedVideo = videoData.value!!)
+            } else {
+                val coroutineScope = rememberCoroutineScope()
+                var imageBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+                var imageList = remember { mutableStateListOf<ImageBitmap?>() }
+                var videoList = remember { mutableStateListOf<SharedVideo>() }
+                var documentList =
+                    remember { mutableStateListOf<SharedDocument>() } // Add this line
+                var imageSourceOptionDialog by remember { mutableStateOf(value = false) }
+                var launchCamera by remember { mutableStateOf(value = false) }
+                var launchGallery by remember { mutableStateOf(value = false) }
+                var launchVideoGallery by remember { mutableStateOf(value = false) }
+                var launchDocumentPicker by remember { mutableStateOf(value = false) } // Add this line
+                var launchSetting by remember { mutableStateOf(value = false) }
+                var permissionRationalDialog by remember { mutableStateOf(value = false) }
 
-                        else -> {
-                            permissionRationalDialog = true
-                        }
-                    }
-                }
-            })
-
-            val cameraManager = rememberCameraManager {
-                coroutineScope.launch {
-                    val bitmap = withContext(Dispatchers.Default) {
-                        it?.toImageBitmap()
-                    }
-                    imageBitmap = bitmap
-                }
-            }
-
-            // Image gallery manager
-            val imageGalleryManager = rememberGalleryManager(
-                isSingleSelection = false,
-                type = PickerType.IMAGE
-            ) { sharedImages ->
-                coroutineScope.launch {
-                    withContext(Dispatchers.Default) {
-                        sharedImages?.forEach { img ->
-                            img.toImageBitmap()?.let { bitmap ->
-                                imageList.add(bitmap)
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Video gallery manager
-            val videoGalleryManager = rememberGalleryManager(
-                isSingleSelection = false,
-                type = PickerType.VIDEO
-            ) { sharedVideos ->
-                coroutineScope.launch {
-                    withContext(Dispatchers.Default) {
-                        sharedVideos?.forEach { video ->
-                            if (video.mimeType?.startsWith("video/") == true) {
-                                videoList.add(
-                                    SharedVideo(
-                                        name = video.name ?: "Unknown Video",
-                                        mimeType = video.mimeType!!,
-                                        data = video.toByteArray()
-                                    )
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Mixed media gallery manager
-            val mixedGalleryManager = rememberGalleryManager(
-                isSingleSelection = false,
-                type = PickerType.IMAGE_AND_VIDEO
-            ) { sharedMedia ->
-                coroutineScope.launch {
-                    withContext(Dispatchers.Default) {
-                        sharedMedia?.forEach { media ->
-                            when {
-                                media.mimeType?.startsWith("image/") == true -> {
-                                    media.toImageBitmap()?.let { bitmap ->
-                                        imageList.add(bitmap)
+                val permissionsManager = createPermissionsManager(object : PermissionCallback {
+                    override fun onPermissionStatus(
+                        permissionType: PermissionType,
+                        status: PermissionStatus
+                    ) {
+                        when (status) {
+                            PermissionStatus.GRANTED -> {
+                                when (permissionType) {
+                                    PermissionType.CAMERA -> launchCamera = true
+                                    PermissionType.GALLERY -> {
+                                        launchGallery = true
+                                        launchVideoGallery = false
                                     }
                                 }
+                            }
 
-                                media.mimeType?.startsWith("video/") == true -> {
+                            else -> {
+                                permissionRationalDialog = true
+                            }
+                        }
+                    }
+                })
+
+                val cameraManager = rememberCameraManager {
+                    coroutineScope.launch {
+                        val bitmap = withContext(Dispatchers.Default) {
+                            it?.toImageBitmap()
+                        }
+                        imageBitmap = bitmap
+                    }
+                }
+
+                // Image gallery manager
+                val imageGalleryManager = rememberGalleryManager(
+                    isSingleSelection = false,
+                    type = PickerType.IMAGE
+                ) { sharedImages ->
+                    coroutineScope.launch {
+                        withContext(Dispatchers.Default) {
+                            sharedImages?.forEach { img ->
+                                img.toImageBitmap()?.let { bitmap ->
+                                    imageList.add(bitmap)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Video gallery manager
+                val videoGalleryManager = rememberGalleryManager(
+                    isSingleSelection = false,
+                    type = PickerType.VIDEO
+                ) { sharedVideos ->
+                    coroutineScope.launch {
+                        withContext(Dispatchers.Default) {
+                            sharedVideos?.forEach { video ->
+                                if (video.mimeType?.startsWith("video/") == true) {
                                     videoList.add(
                                         SharedVideo(
-                                            name = media.name ?: "Unknown Video",
-                                            mimeType = media.mimeType!!,
-                                            data = media.toByteArray()
+                                            name = video.name ?: "Unknown Video",
+                                            mimeType = video.mimeType!!,
+                                            data = video.toByteArray()
                                         )
                                     )
                                 }
@@ -170,176 +147,216 @@ fun App() {
                         }
                     }
                 }
-            }
-            val documentPickerManager = rememberGalleryManager(
-                isSingleSelection = false,
-                type = PickerType.DOCUMENT
-            ) { sharedFiles ->
-                coroutineScope.launch {
-                    withContext(Dispatchers.Default) {
-                        sharedFiles?.forEach { file ->
-                            documentList.add(
-                                SharedDocument(
-                                    name = file.name ?: "Unknown Document",
-                                    mimeType = file.mimeType,
-                                    data = file.toByteArray()
+
+                // Mixed media gallery manager
+                val mixedGalleryManager = rememberGalleryManager(
+                    isSingleSelection = false,
+                    type = PickerType.IMAGE_AND_VIDEO
+                ) { sharedMedia ->
+                    coroutineScope.launch {
+                        withContext(Dispatchers.Default) {
+                            sharedMedia?.forEach { media ->
+                                when {
+                                    media.mimeType?.startsWith("image/") == true -> {
+                                        media.toImageBitmap()?.let { bitmap ->
+                                            imageList.add(bitmap)
+                                        }
+                                    }
+
+                                    media.mimeType?.startsWith("video/") == true -> {
+                                        videoList.add(
+                                            SharedVideo(
+                                                name = media.name ?: "Unknown Video",
+                                                mimeType = media.mimeType!!,
+                                                data = media.toByteArray()
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                val documentPickerManager = rememberGalleryManager(
+                    isSingleSelection = false,
+                    type = PickerType.DOCUMENT
+                ) { sharedFiles ->
+                    coroutineScope.launch {
+                        withContext(Dispatchers.Default) {
+                            sharedFiles?.forEach { file ->
+                                documentList.add(
+                                    SharedDocument(
+                                        name = file.name ?: "Unknown Document",
+                                        mimeType = file.mimeType,
+                                        data = file.toByteArray()
+                                    )
                                 )
-                            )
+                            }
                         }
                     }
                 }
-            }
 
-            // Handle document picker launch
-            if (launchDocumentPicker) {
-                if (permissionsManager.isPermissionGranted(PermissionType.GALLERY)) {
-                    documentPickerManager.launch()
-                } else {
-                    permissionsManager.askPermission(PermissionType.GALLERY)
-                }
-                launchDocumentPicker = false
-            }
-
-            // Handle dialog and permission flows
-            if (imageSourceOptionDialog) {
-                MediaSourceOptionDialog(
-                    onDismissRequest = {
-                        imageSourceOptionDialog = false
-                    },
-                    onImageGalleryRequest = {
-                        imageSourceOptionDialog = false
-                        launchGallery = true
-                        launchVideoGallery = false
-                    },
-                    onVideoGalleryRequest = {
-                        imageSourceOptionDialog = false
-                        launchVideoGallery = true
-                        launchGallery = false
-                    },
-                    onMixedGalleryRequest = {
-                        imageSourceOptionDialog = false
-                        launchGallery = true
-                        launchVideoGallery = true
-                    },
-                    onCameraRequest = {
-                        imageSourceOptionDialog = false
-                        launchCamera = true
+                // Handle document picker launch
+                if (launchDocumentPicker) {
+                    if (permissionsManager.isPermissionGranted(PermissionType.GALLERY)) {
+                        documentPickerManager.launch()
+                    } else {
+                        permissionsManager.askPermission(PermissionType.GALLERY)
                     }
-                )
-            }
-
-            if (launchGallery && launchVideoGallery) {
-                // Launch mixed media picker
-                if (permissionsManager.isPermissionGranted(PermissionType.GALLERY)) {
-                    mixedGalleryManager.launch()
-                } else {
-                    permissionsManager.askPermission(PermissionType.GALLERY)
+                    launchDocumentPicker = false
                 }
-                launchGallery = false
-                launchVideoGallery = false
-            } else if (launchGallery) {
-                // Launch image only picker
-                if (permissionsManager.isPermissionGranted(PermissionType.GALLERY)) {
-                    imageGalleryManager.launch()
-                } else {
-                    permissionsManager.askPermission(PermissionType.GALLERY)
-                }
-                launchGallery = false
-            } else if (launchVideoGallery) {
-                // Launch video only picker
-                if (permissionsManager.isPermissionGranted(PermissionType.GALLERY)) {
-                    videoGalleryManager.launch()
-                } else {
-                    permissionsManager.askPermission(PermissionType.GALLERY)
-                }
-                launchVideoGallery = false
-            }
 
-            if (launchCamera) {
-                if (permissionsManager.isPermissionGranted(PermissionType.CAMERA)) {
-                    cameraManager.launch()
-                } else {
-                    permissionsManager.askPermission(PermissionType.CAMERA)
-                }
-                launchCamera = false
-            }
-
-            if (launchSetting) {
-                permissionsManager.launchSettings()
-                launchSetting = false
-            }
-
-            if (permissionRationalDialog) {
-                AlertMessageDialog(
-                    title = "Permission Required",
-                    message = "To access media files, please grant this permission. You can manage permissions in your device settings.",
-                    positiveButtonText = "Settings",
-                    negativeButtonText = "Cancel",
-                    onPositiveClick = {
-                        permissionRationalDialog = false
-                        launchSetting = true
-                    },
-                    onNegativeClick = {
-                        permissionRationalDialog = false
-                    }
-                )
-            }
-
-            Box(
-                modifier = Modifier.fillMaxSize().padding(it).background(Color.DarkGray),
-                contentAlignment = Alignment.Center
-            ) {
-                if (imageBitmap != null || imageList.isNotEmpty() || videoList.isNotEmpty() || documentList.isNotEmpty()) {
-                    // Enhanced Media Display Screen with documents
-                    EnhancedMediaDisplayScreen(
-                        imageList = imageList,
-                        videoList = videoList,
-                        documentList = documentList, // Add this line
-                        singleImage = imageBitmap,
-                        onVideoClick = { video ->
-                            coroutineScope.launch {
-                                openVideoInExternalPlayer(video)
-                            }
+                // Handle dialog and permission flows
+                if (imageSourceOptionDialog) {
+                    MediaSourceOptionDialog(
+                        onDismissRequest = {
+                            imageSourceOptionDialog = false
                         },
-                        onDocumentClick = { document -> // Add this lambda
-                            coroutineScope.launch {
-                                openDocumentInExternalViewer(document)
-                            }
-                        },
-                        onImageClick = {
-                            imageSourceOptionDialog = true
-                        },
-                        onBackToSelection = {
-                            imageBitmap = null
-                            imageList.clear()
-                            videoList.clear()
-                            documentList.clear() // Add this line
-                        }
-                    )
-                } else {
-                    // Enhanced Selection Screen with document option
-                    EnhancedSelectionScreen(
-                        onImageGalleryClick = {
+                        onImageGalleryRequest = {
+                            imageSourceOptionDialog = false
                             launchGallery = true
                             launchVideoGallery = false
                         },
-                        onVideoGalleryClick = {
+                        onVideoGalleryRequest = {
+                            imageSourceOptionDialog = false
                             launchVideoGallery = true
                             launchGallery = false
                         },
-                        onDocumentPickerClick = { // Add this lambda
-                            launchDocumentPicker = true
+                        onMixedGalleryRequest = {
+                            imageSourceOptionDialog = false
+                            launchGallery = true
+                            launchVideoGallery = true
                         },
-                        onCameraClick = {
+                        onCameraRequest = {
+                            imageSourceOptionDialog = false
                             launchCamera = true
-                        },
-                        onMixedGalleryClick = {
-                            imageSourceOptionDialog = true
                         }
                     )
                 }
+
+                if (launchGallery && launchVideoGallery) {
+                    // Launch mixed media picker
+                    if (permissionsManager.isPermissionGranted(PermissionType.GALLERY)) {
+                        mixedGalleryManager.launch()
+                    } else {
+                        permissionsManager.askPermission(PermissionType.GALLERY)
+                    }
+                    launchGallery = false
+                    launchVideoGallery = false
+                } else if (launchGallery) {
+                    // Launch image only picker
+                    if (permissionsManager.isPermissionGranted(PermissionType.GALLERY)) {
+                        imageGalleryManager.launch()
+                    } else {
+                        permissionsManager.askPermission(PermissionType.GALLERY)
+                    }
+                    launchGallery = false
+                } else if (launchVideoGallery) {
+                    // Launch video only picker
+                    if (permissionsManager.isPermissionGranted(PermissionType.GALLERY)) {
+                        videoGalleryManager.launch()
+                    } else {
+                        permissionsManager.askPermission(PermissionType.GALLERY)
+                    }
+                    launchVideoGallery = false
+                }
+
+                if (launchCamera) {
+                    if (permissionsManager.isPermissionGranted(PermissionType.CAMERA)) {
+                        cameraManager.launch()
+                    } else {
+                        permissionsManager.askPermission(PermissionType.CAMERA)
+                    }
+                    launchCamera = false
+                }
+
+                if (launchSetting) {
+                    permissionsManager.launchSettings()
+                    launchSetting = false
+                }
+
+                if (permissionRationalDialog) {
+                    AlertMessageDialog(
+                        title = "Permission Required",
+                        message = "To access media files, please grant this permission. You can manage permissions in your device settings.",
+                        positiveButtonText = "Settings",
+                        negativeButtonText = "Cancel",
+                        onPositiveClick = {
+                            permissionRationalDialog = false
+                            launchSetting = true
+                        },
+                        onNegativeClick = {
+                            permissionRationalDialog = false
+                        }
+                    )
+                }
+
+                Box(
+                    modifier = Modifier.fillMaxSize().padding(it).background(Color.DarkGray),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (imageBitmap != null || imageList.isNotEmpty() || videoList.isNotEmpty() || documentList.isNotEmpty()) {
+                        // Enhanced Media Display Screen with documents
+                        EnhancedMediaDisplayScreen(
+                            imageList = imageList,
+                            videoList = videoList,
+                            documentList = documentList, // Add this line
+                            singleImage = imageBitmap,
+                            onVideoClick = { video ->
+                                coroutineScope.launch {
+                                    //openVideoInExternalPlayer(video)
+                                    videoData.value = video
+                                    wantToShow.value = true
+                                }
+                            },
+                            onDocumentClick = { document -> // Add this lambda
+                                coroutineScope.launch {
+                                    openDocumentInExternalViewer(document)
+                                }
+                            },
+                            onImageClick = {
+                                imageSourceOptionDialog = true
+                            },
+                            onBackToSelection = {
+                                imageBitmap = null
+                                imageList.clear()
+                                videoList.clear()
+                                documentList.clear() // Add this line
+                            }
+                        )
+                    } else {
+                        // Enhanced Selection Screen with document option
+                        EnhancedSelectionScreen(
+                            onImageGalleryClick = {
+                                launchGallery = true
+                                launchVideoGallery = false
+                            },
+                            onVideoGalleryClick = {
+                                launchVideoGallery = true
+                                launchGallery = false
+                            },
+                            onDocumentPickerClick = { // Add this lambda
+                                launchDocumentPicker = true
+                            },
+                            onCameraClick = {
+                                launchCamera = true
+                            },
+                            onMixedGalleryClick = {
+                                imageSourceOptionDialog = true
+                            }
+                        )
+                    }
+                }
             }
         }
+    }
+}
+
+@Composable
+fun VideoPlayer(modifier: Modifier, mySharedVideo: SharedVideo) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("Playing video in-app")
+        InAppVideoPlayer(video = mySharedVideo, modifier = Modifier.fillMaxSize())
     }
 }
 
@@ -370,98 +387,6 @@ data class SharedVideo(
     }
 }
 
-// Composable to display video information with modern UI
-@Composable
-fun VideoCard(
-    video: SharedVideo,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .clickable { onClick() },
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Video icon with modern styling
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    painter = painterResource(Res.drawable.ic_camera), // Replace with video icon when available
-                    contentDescription = "Video",
-                    modifier = Modifier.size(28.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            // Video details
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = video.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Mime type with modern chip-like appearance
-                Text(
-                    text = video.mimeType.uppercase(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .background(
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                            shape = RoundedCornerShape(6.dp)
-                        )
-                        .padding(horizontal = 8.dp, vertical = 2.dp)
-                )
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                // File size
-                video.data?.let { data ->
-                    Text(
-                        text = formatFileSize(data.size),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    )
-                }
-            }
-
-            // Play indicator
-            Icon(
-                painter = painterResource(Res.drawable.ic_camera), // Use a play icon if available
-                contentDescription = "Play video",
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-            )
-        }
-    }
-}
 
 // Helper function to format file size - KMP compatible
 fun formatFileSize(bytes: Int): String {

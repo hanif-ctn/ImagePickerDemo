@@ -1,9 +1,7 @@
 // androidMain
 package org.hanif.imagepickerdemo
 
-import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,14 +12,7 @@ actual suspend fun openDocumentInExternalViewer(document: SharedDocument): Boole
     return withContext(Dispatchers.IO) {
         try {
             val context = AndroidContext.applicationContext
-            println("Document name: ${document.name}")
-            println("Document mimeType: ${document.mimeType}")
-            println("Document data size: ${document.data?.size ?: 0}")
-
-            val documentData = document.data ?: run {
-                println("Document data is null")
-                return@withContext false
-            }
+            val documentData = document.data ?: run { return@withContext false }
 
             // Create a temporary file
             val tempDir = File(context.cacheDir, "documents")

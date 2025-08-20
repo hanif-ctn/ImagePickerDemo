@@ -42,6 +42,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import imagepickerdemo.composeapp.generated.resources.Res
+import imagepickerdemo.composeapp.generated.resources.ic_back
 import imagepickerdemo.composeapp.generated.resources.ic_camera
 import imagepickerdemo.composeapp.generated.resources.ic_images
 import imagepickerdemo.composeapp.generated.resources.ic_person_circle
@@ -60,21 +61,39 @@ fun App() {
         Scaffold {
             val wantToShow = remember { mutableStateOf(false) }
             val videoData = remember { mutableStateOf<SharedVideo?>(null) }
+            val docData = remember { mutableStateOf<SharedDocument?>(null) }
+            var showMediaViewerDialog by remember { mutableStateOf(false) }
+            var selectedVideoForDialog by remember { mutableStateOf<SharedVideo?>(null) }
+            var selectedDocumentForDialog by remember { mutableStateOf<SharedDocument?>(null) }
 
             if (wantToShow.value) {
-                VideoPlayer(modifier = Modifier.fillMaxSize().padding(it), mySharedVideo = videoData.value!!)
+                if (videoData.value != null) VideoPlayer(
+                    modifier = Modifier.fillMaxSize().padding(it),
+                    mySharedVideo = videoData.value!!,
+                    onBack = {
+                        wantToShow.value = false
+                        videoData.value = null
+                    }
+                )
+                if (docData.value != null) DocumentScreen(
+                    document = docData.value!!,
+                    onBack = {
+                        wantToShow.value = false
+                        videoData.value = null
+                    }
+                )
             } else {
                 val coroutineScope = rememberCoroutineScope()
                 var imageBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-                var imageList = remember { mutableStateListOf<ImageBitmap?>() }
+                var imageList =
+                    remember { mutableStateListOf<ImageBitmap>() } // Changed to non-nullable list
                 var videoList = remember { mutableStateListOf<SharedVideo>() }
-                var documentList =
-                    remember { mutableStateListOf<SharedDocument>() } // Add this line
+                var documentList = remember { mutableStateListOf<SharedDocument>() }
                 var imageSourceOptionDialog by remember { mutableStateOf(value = false) }
                 var launchCamera by remember { mutableStateOf(value = false) }
                 var launchGallery by remember { mutableStateOf(value = false) }
                 var launchVideoGallery by remember { mutableStateOf(value = false) }
-                var launchDocumentPicker by remember { mutableStateOf(value = false) } // Add this line
+                var launchDocumentPicker by remember { mutableStateOf(value = false) }
                 var launchSetting by remember { mutableStateOf(value = false) }
                 var permissionRationalDialog by remember { mutableStateOf(value = false) }
 
@@ -116,13 +135,12 @@ fun App() {
                     type = PickerType.IMAGE
                 ) { sharedImages ->
                     coroutineScope.launch {
-                        withContext(Dispatchers.Default) {
-                            sharedImages?.forEach { img ->
-                                img.toImageBitmap()?.let { bitmap ->
-                                    imageList.add(bitmap)
-                                }
-                            }
+                        val bitmaps = withContext(Dispatchers.Default) {
+                            sharedImages?.mapNotNull { img ->
+                                img.toImageBitmap()
+                            } ?: emptyList()
                         }
+                        imageList.addAll(bitmaps)
                     }
                 }
 
@@ -132,19 +150,17 @@ fun App() {
                     type = PickerType.VIDEO
                 ) { sharedVideos ->
                     coroutineScope.launch {
-                        withContext(Dispatchers.Default) {
-                            sharedVideos?.forEach { video ->
-                                if (video.mimeType?.startsWith("video/") == true) {
-                                    videoList.add(
-                                        SharedVideo(
-                                            name = video.name ?: "Unknown Video",
-                                            mimeType = video.mimeType!!,
-                                            data = video.toByteArray()
-                                        )
+                        val videos = withContext(Dispatchers.Default) {
+                            sharedVideos?.filter { it.mimeType?.startsWith("video/") == true }
+                                ?.map {
+                                    SharedVideo(
+                                        name = it.name ?: "Unknown Video",
+                                        mimeType = it.mimeType!!,
+                                        data = it.toByteArray()
                                     )
-                                }
-                            }
+                                } ?: emptyList()
                         }
+                        videoList.addAll(videos)
                     }
                 }
 
@@ -182,17 +198,16 @@ fun App() {
                     type = PickerType.DOCUMENT
                 ) { sharedFiles ->
                     coroutineScope.launch {
-                        withContext(Dispatchers.Default) {
-                            sharedFiles?.forEach { file ->
-                                documentList.add(
-                                    SharedDocument(
-                                        name = file.name ?: "Unknown Document",
-                                        mimeType = file.mimeType,
-                                        data = file.toByteArray()
-                                    )
+                        val documents = withContext(Dispatchers.Default) {
+                            sharedFiles?.map {
+                                SharedDocument(
+                                    name = it.name ?: "Unknown Document",
+                                    mimeType = it.mimeType,
+                                    data = it.toByteArray()
                                 )
-                            }
+                            } ?: emptyList()
                         }
+                        documentList.addAll(documents)
                     }
                 }
 
@@ -291,6 +306,48 @@ fun App() {
                     )
                 }
 
+                if (showMediaViewerDialog) {
+                    val mediaName =
+                        selectedVideoForDialog?.name ?: selectedDocumentForDialog?.name ?: "media"
+
+                    MediaViewerOptionDialog(
+                        mediaName = mediaName,
+                        onDismissRequest = {
+                            showMediaViewerDialog = false
+                            selectedVideoForDialog = null
+                            selectedDocumentForDialog = null
+                        },
+                        onInternalViewerRequest = {
+                            showMediaViewerDialog = false
+                            selectedVideoForDialog?.let {
+                                videoData.value = it
+                                wantToShow.value = true
+                            }
+                            selectedDocumentForDialog?.let {
+                                docData.value = it
+                                wantToShow.value = true
+                            }
+                            selectedVideoForDialog = null
+                            selectedDocumentForDialog = null
+                        },
+                        onExternalViewerRequest = {
+                            showMediaViewerDialog = false
+                            coroutineScope.launch {
+                                selectedVideoForDialog?.let { video ->
+                                    // Handle external video opening
+                                    openVideoInExternalPlayer(video)
+                                }
+                                selectedDocumentForDialog?.let { document ->
+                                    // Handle external document opening
+                                    openDocumentInExternalViewer(document)
+                                }
+                                selectedVideoForDialog = null
+                                selectedDocumentForDialog = null
+                            }
+                        }
+                    )
+                }
+
                 Box(
                     modifier = Modifier.fillMaxSize().padding(it).background(Color.DarkGray),
                     contentAlignment = Alignment.Center
@@ -300,19 +357,19 @@ fun App() {
                         EnhancedMediaDisplayScreen(
                             imageList = imageList,
                             videoList = videoList,
-                            documentList = documentList, // Add this line
+                            documentList = documentList,
                             singleImage = imageBitmap,
                             onVideoClick = { video ->
-                                coroutineScope.launch {
-                                    //openVideoInExternalPlayer(video)
-                                    videoData.value = video
-                                    wantToShow.value = true
-                                }
+                                // Show dialog instead of direct action
+                                selectedVideoForDialog = video
+                                videoData.value = video
+                                showMediaViewerDialog = true
                             },
-                            onDocumentClick = { document -> // Add this lambda
-                                coroutineScope.launch {
-                                    openDocumentInExternalViewer(document)
-                                }
+                            onDocumentClick = { document ->
+                                // Show dialog instead of direct action
+                                selectedDocumentForDialog = document
+                                docData.value = document
+                                showMediaViewerDialog = true
                             },
                             onImageClick = {
                                 imageSourceOptionDialog = true
@@ -321,7 +378,7 @@ fun App() {
                                 imageBitmap = null
                                 imageList.clear()
                                 videoList.clear()
-                                documentList.clear() // Add this line
+                                documentList.clear()
                             }
                         )
                     } else {
@@ -335,7 +392,7 @@ fun App() {
                                 launchVideoGallery = true
                                 launchGallery = false
                             },
-                            onDocumentPickerClick = { // Add this lambda
+                            onDocumentPickerClick = {
                                 launchDocumentPicker = true
                             },
                             onCameraClick = {
@@ -353,14 +410,27 @@ fun App() {
 }
 
 @Composable
-fun VideoPlayer(modifier: Modifier, mySharedVideo: SharedVideo) {
+fun VideoPlayer(modifier: Modifier, mySharedVideo: SharedVideo, onBack: () -> Unit) {
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("Playing video in-app")
+        // Back button in top row
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                painter = painterResource(Res.drawable.ic_back),
+                contentDescription = null,
+                modifier = Modifier.size(16.dp).clickable {
+                    onBack()
+                },
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Text("Playing video: ${mySharedVideo.name}")
+        }
         InAppVideoPlayer(video = mySharedVideo, modifier = Modifier.fillMaxSize())
     }
 }
 
-// Data class to hold video information
 data class SharedVideo(
     val name: String,
     val mimeType: String,
@@ -387,8 +457,6 @@ data class SharedVideo(
     }
 }
 
-
-// Helper function to format file size - KMP compatible
 fun formatFileSize(bytes: Int): String {
     return when {
         bytes < 1024 -> "$bytes B"
@@ -578,7 +646,7 @@ fun MediaSourceOptionDialog(
 // Modern Media Display Screen with contemporary design
 @Composable
 fun EnhancedMediaDisplayScreen(
-    imageList: List<ImageBitmap?>,
+    imageList: List<ImageBitmap>,
     videoList: List<SharedVideo>,
     documentList: List<SharedDocument>, // Add this parameter
     singleImage: ImageBitmap?,
@@ -604,7 +672,7 @@ fun EnhancedMediaDisplayScreen(
         ) {
             // Modern Header with Back Button
             ModernMediaHeader(
-                totalImages = imageList.count { it != null } + if (singleImage != null) 1 else 0,
+                totalImages = imageList.size + if (singleImage != null) 1 else 0,
                 totalVideos = videoList.size,
                 onBackClick = onBackToSelection
             )
@@ -623,7 +691,9 @@ fun EnhancedMediaDisplayScreen(
                 // Images Section
                 val allImages = buildList {
                     singleImage?.let { add(it) }
-                    addAll(imageList.filterNotNull())
+                    if (imageList.isNotEmpty()) {
+                        addAll(imageList)
+                    }
                 }
 
                 if (allImages.isNotEmpty()) {
@@ -990,9 +1060,15 @@ fun DocumentCard(
 fun getDocumentTypeColor(mimeType: String?): Color {
     return when {
         mimeType?.contains("pdf") == true -> Color(0xFFE53E3E) // Red for PDF
-        mimeType?.contains("word") == true || mimeType?.contains("document") == true -> Color(0xFF2B6CB0) // Blue for Word
-        mimeType?.contains("sheet") == true || mimeType?.contains("excel") == true -> Color(0xFF38A169) // Green for Excel
-        mimeType?.contains("presentation") == true || mimeType?.contains("powerpoint") == true -> Color(0xFFD69E2E) // Orange for PowerPoint
+        mimeType?.contains("word") == true || mimeType?.contains("document") == true -> Color(
+            0xFF2B6CB0
+        ) // Blue for Word
+        mimeType?.contains("sheet") == true || mimeType?.contains("excel") == true -> Color(
+            0xFF38A169
+        ) // Green for Excel
+        mimeType?.contains("presentation") == true || mimeType?.contains("powerpoint") == true -> Color(
+            0xFFD69E2E
+        ) // Orange for PowerPoint
         mimeType?.contains("text") == true -> Color(0xFF805AD5) // Purple for text files
         else -> MaterialTheme.colorScheme.primary
     }
@@ -1406,4 +1482,153 @@ fun ModernActionCard(
             }
         }
     }
+}
+
+@Composable
+fun MediaViewerOptionDialog(
+    mediaName: String,
+    onDismissRequest: () -> Unit,
+    onInternalViewerRequest: () -> Unit,
+    onExternalViewerRequest: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = {
+            Text(
+                "Open Media",
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Choose how to open \"$mediaName\":",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                // Internal Viewer Button
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onInternalViewerRequest() },
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            painter = painterResource(Res.drawable.ic_person_circle), // Use app icon when available
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                "Open in App",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Text(
+                                "View within the application",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                }
+
+                // External Viewer Button
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onExternalViewerRequest() },
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            painter = painterResource(Res.drawable.ic_camera), // Use external/share icon when available
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                "Open Externally",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            Text(
+                                "Use system default app",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(
+                onClick = onDismissRequest,
+                colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Text(
+                    "Cancel",
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(24.dp)
+    )
+}
+
+@Composable
+fun AlertMessageDialog(
+    title: String,
+    message: String,
+    positiveButtonText: String,
+    negativeButtonText: String,
+    onPositiveClick: () -> Unit,
+    onNegativeClick: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onNegativeClick,
+        title = { Text(title) },
+        text = { Text(message) },
+        confirmButton = {
+            TextButton(onClick = onPositiveClick) {
+                Text(positiveButtonText)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onNegativeClick) {
+                Text(negativeButtonText)
+            }
+        }
+    )
 }

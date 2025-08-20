@@ -70,6 +70,7 @@ kotlin {
             implementation(compose.components.uiToolingPreview)
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
+            implementation(compose.materialIconsExtended)
 //            implementation(libs.cmp.image.pick.n.crop)
 
         }
@@ -79,6 +80,10 @@ kotlin {
         jvmMain.dependencies {
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutinesSwing)
+        }
+        iosMain.dependencies {
+            implementation(compose.material3)
+            implementation(compose.materialIconsExtended)
         }
     }
 }

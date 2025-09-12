@@ -1,6 +1,7 @@
 // shared/androidMain/DocumentViewer.android.kt
 package org.hanif.imagepickerdemo
 
+import PdfViewer1
 import android.graphics.BitmapFactory
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
@@ -60,7 +61,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -81,7 +82,7 @@ import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-actual fun DocumentViewer(document: SharedDocument, modifier: Modifier, onBack : () -> Unit) {
+actual fun DocumentViewer(document: SharedDocument, modifier: Modifier, onBack: () -> Unit) {
     var isControlsVisible by remember { mutableStateOf(true) }
     var topAppBarHeight by remember { mutableStateOf(0.dp) }
     val contentPadding by animateDpAsState(
@@ -101,7 +102,7 @@ actual fun DocumentViewer(document: SharedDocument, modifier: Modifier, onBack :
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(androidx.compose.ui.graphics.Color.Black)
             .pointerInput(Unit) {
                 detectTapGestures {
                     isControlsVisible = !isControlsVisible
@@ -110,12 +111,13 @@ actual fun DocumentViewer(document: SharedDocument, modifier: Modifier, onBack :
     ) {
         when {
             document.mimeType?.contains("pdf") == true ->
-                PdfViewer(
-                    document, Modifier.fillMaxSize().run
-                    {
-                        if (isControlsVisible) Modifier.padding(top = contentPadding) else Modifier
-                    }
-                )
+//                PdfViewer(
+//                    document,
+//                    Modifier.fillMaxSize().run {
+//                        if (isControlsVisible) Modifier.padding(top = contentPadding) else Modifier
+//                    }
+//                )
+                PdfViewer1(document, contentPaddingValues = if (isControlsVisible) PaddingValues(top = topAppBarHeight) else PaddingValues(), modifier = modifier)
 
             document.mimeType?.startsWith("image/") == true ->
                 ImageViewer(document, Modifier.fillMaxSize())
@@ -153,18 +155,18 @@ actual fun DocumentViewer(document: SharedDocument, modifier: Modifier, onBack :
                         text = document.name,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        color = Color.White
+                        color = androidx.compose.ui.graphics.Color.White
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Black.copy(alpha = 0.7f)
+                    containerColor = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.7f)
                 ),
                 navigationIcon = {
-                    IconButton(onClick = { onBack()}) {
+                    IconButton(onClick = { onBack() }) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color.White
+                            tint = androidx.compose.ui.graphics.Color.White
                         )
                     }
                 },
@@ -173,7 +175,7 @@ actual fun DocumentViewer(document: SharedDocument, modifier: Modifier, onBack :
                         Icon(
                             Icons.Default.Share,
                             contentDescription = "Share",
-                            tint = Color.White
+                            tint = androidx.compose.ui.graphics.Color.White
                         )
                     }
                 }
@@ -196,6 +198,10 @@ private fun PdfViewer(document: SharedDocument, modifier: Modifier) {
     var currentPage by remember { mutableIntStateOf(0) }
     val listState = rememberLazyListState()
 
+    // Global zoom state (applies to all pages)
+    var globalScale by remember { mutableFloatStateOf(1f) }
+    var globalOffset by remember { mutableStateOf(Offset.Zero) }
+
     LaunchedEffect(file) {
         withContext(Dispatchers.IO) {
             try {
@@ -212,25 +218,79 @@ private fun PdfViewer(document: SharedDocument, modifier: Modifier) {
         }
     }
 
+    // Reset offset when scale becomes 1
+    LaunchedEffect(globalScale) {
+        if (globalScale == 1f) {
+            globalOffset = Offset.Zero
+        }
+    }
+
     Box(modifier = modifier) {
         if (isLoading) {
             LoadingIndicator()
         } else {
             renderer?.let { pdfRenderer ->
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize().run {
-                        Modifier
-                    },
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    items((0 until pdfRenderer.pageCount).toList()) { index ->
-                        PdfPageItem(pdfRenderer, index)
+                // Modifier that handles global pinch & double-tap zooming with horizontal panning
+                val zoomContainerModifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        // double-tap to toggle between 1x and 2x
+                        detectTapGestures(
+                            onDoubleTap = {
+                                globalScale = if (globalScale > 1f) 1f else 2f
+                            }
+                        )
+                    }
+                    .pointerInput(Unit) {
+                        // pinch-to-zoom and pan handling
+                        detectTransformGestures { _, pan, zoom, _ ->
+                            val newScale = (globalScale * zoom).coerceIn(1f, 5f)
+
+                            // Handle panning - only allow horizontal panning when zoomed
+                            if (newScale > 1f) {
+                                // Calculate max horizontal offset based on scale
+                                val maxHorizontalOffset = (size.width * (newScale - 1f)) / 2f
+
+                                val newOffsetX = (globalOffset.x + pan.x).coerceIn(
+                                    -maxHorizontalOffset,
+                                    maxHorizontalOffset
+                                )
+
+                                globalOffset = Offset(newOffsetX, 0f)
+                            } else {
+                                globalOffset = Offset.Zero
+                            }
+
+                            globalScale = newScale
+                        }
+                    }
+                    .graphicsLayer(
+                        scaleX = globalScale,
+                        scaleY = globalScale,
+                        translationX = globalOffset.x,
+                        translationY = globalOffset.y,
+                        transformOrigin = TransformOrigin.Center
+                    )
+
+                Box(modifier = zoomContainerModifier) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            top = (16.dp * globalScale).coerceAtLeast(16.dp),
+                            bottom = (16.dp * globalScale).coerceAtLeast(16.dp),
+                            start = 16.dp,
+                            end = 16.dp
+                        ),
+                        //verticalArrangement = Arrangement.spacedBy((16.dp * globalScale).coerceAtLeast(16.dp))
+                    ) {
+                        items((0 until pdfRenderer.pageCount).toList()) { index ->
+                            PdfPageItem(pdfRenderer, index)
+                        }
                     }
                 }
 
-                // Page indicator
+                // Page indicator (still shown over scaled content)
                 PageIndicator(
                     currentPage = currentPage + 1,
                     totalPages = pdfRenderer.pageCount,
@@ -246,7 +306,7 @@ private fun PdfPageItem(renderer: PdfRenderer, pageIndex: Int) {
     val pageBitmap = remember(pageIndex) {
         try {
             renderer.openPage(pageIndex).use { page ->
-                val bitmap = createBitmap(page.width * 2, page.height * 2) // Higher resolution
+                val bitmap = createBitmap(page.width * 2, page.height * 2) // High resolution
                 page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                 bitmap
             }
@@ -260,17 +320,22 @@ private fun PdfPageItem(renderer: PdfRenderer, pageIndex: Int) {
             .fillMaxWidth()
             .wrapContentHeight(),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+        colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.White)
     ) {
         pageBitmap?.let { bitmap ->
-            Image(
-                bitmap = bitmap.asImageBitmap(),
-                contentDescription = "Page ${pageIndex + 1}",
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(8.dp),
-                contentScale = ContentScale.FillWidth
-            )
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = "Page ${pageIndex + 1}",
+                    modifier = Modifier.fillMaxWidth(),
+                    contentScale = ContentScale.FillWidth
+                )
+            }
         } ?: Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -307,10 +372,11 @@ private fun ImageViewer(document: SharedDocument, modifier: Modifier) {
                     .pointerInput(Unit) {
                         detectTransformGestures { _, pan, zoom, _ ->
                             scale = (scale * zoom).coerceIn(0.5f, 5f)
-                            offset = Offset(
-                                x = (offset.x + pan.x),
-                                y = (offset.y + pan.y)
-                            )
+                            offset = if (scale > 1f) {
+                                offset + pan
+                            } else {
+                                Offset.Zero
+                            }
                         }
                     },
                 contentScale = ContentScale.Fit
@@ -361,7 +427,6 @@ private fun UnsupportedFileViewer(document: SharedDocument, modifier: Modifier) 
         verticalArrangement = Arrangement.Center
     ) {
         Icon(
-//            Icons.Default.InsertDriveFile,
             Icons.Default.Add,
             contentDescription = null,
             modifier = Modifier.size(72.dp),
@@ -449,12 +514,12 @@ private fun PageIndicator(
         modifier = modifier
             .padding(16.dp)
             .clip(CircleShape),
-        color = Color.Black.copy(alpha = 0.7f)
+        color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.7f)
     ) {
         Text(
             text = "$currentPage / $totalPages",
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            color = Color.White,
+            color = androidx.compose.ui.graphics.Color.White,
             style = MaterialTheme.typography.bodySmall
         )
     }
